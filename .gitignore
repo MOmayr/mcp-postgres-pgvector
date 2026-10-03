@@ -1,0 +1,14 @@
+node_modules/
+build/
+*.log
+logs/
+.DS_Store
+.idea/
+.vscode/
+.cursor
+
+# Local credentials and site config. Commit the *.example files only.
+.env
+config.json
+config-stdio.json
+grants.sql

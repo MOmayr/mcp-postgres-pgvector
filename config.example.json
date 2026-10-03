@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "url": "http://localhost:3000/mcp",
+      "transport": "http",
+      "headers": {
+        "X-PG-Host": "localhost",
+        "X-PG-Port": "5432",
+        "X-PG-User": "postgres",
+        "X-PG-Password": "postgres",
+        "X-PG-Database": "postgres"
+      }
+    }
+  }
+}
