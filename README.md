@@ -8,7 +8,7 @@ The primary purpose is normal database work: connect, inspect the schema, run re
 
 **PostgreSQL.** `connect_db` opens the connection. `list_schemas`, `list_tables`, and `describe_tables` show the agent what it can query. `describe_tables` includes primary keys, defaults, PostGIS `geometry(type, srid)` and `geography(type, srid)`, and `vector` / `halfvec` types when those catalogs exist. `query` runs `SELECT`, `WITH`, and `EXPLAIN`. `execute` runs `INSERT`, `UPDATE`, and `DELETE`. `validate_sql` runs `EXPLAIN` and returns `true` or the error. `resolve_mentions` ranks name matches with `pg_trgm` (`similarity` or `word_similarity`). Parameters use `$1` or `?`.
 
-**pgvector.** `list_vector_tables` finds `vector` and `halfvec` columns. `vector_search` sends the query text to an OpenAI-compatible `/v1/embeddings` endpoint (vLLM, Ollama, or a hosted API), then ranks rows in PostgreSQL with cosine, L2, or inner product. Pass `text_column` to fuse that ranking with English full text or trigrams (reciprocal rank fusion, `k = 60`). `vector_execute` embeds text and inserts or updates the vector column. The agent passes text. The server fetches the embedding, checks its length against the column, and binds it as a query parameter.
+**pgvector.** `list_vector_tables` finds `vector` and `halfvec` columns. `vector_search` sends the query text to an OpenAI-compatible `/v1/embeddings` endpoint (vLLM, Ollama, or a hosted API), then ranks rows in PostgreSQL with cosine, L2, or inner product. Pass `text_column` to fuse that ranking with English full text or trigrams. The fused score keeps a closer embedding ahead of a weak keyword hit. `vector_execute` embeds text and inserts or updates the vector column. The agent passes text. The server fetches the embedding, checks its length against the column, and binds it as a query parameter.
 
 PostgreSQL tools need only a database connection. `list_vector_tables` needs the `vector` extension. `vector_search` and `vector_execute` also need `EMBEDDING_URL` and `EMBEDDING_MODEL`.
 
@@ -180,7 +180,7 @@ These need the `vector` extension and `EMBEDDING_URL` plus `EMBEDDING_MODEL` in 
 | Tool | What it does |
 |---|---|
 | `list_vector_tables` | Tables that have a `vector` or `halfvec` column. |
-| `vector_search` | Embed each string in `query` and rank with pgvector. Optional hybrid search fuses that ranking with full text or trigrams (reciprocal rank fusion, `k = 60`). |
+| `vector_search` | Embed each string in `query` and rank with pgvector. Optional hybrid search fuses that ranking with full text or trigrams without letting a weak keyword hit outrank a clearly closer embedding. |
 | `vector_execute` | Embed text and `insert` or `update` the vector column. |
 
 ### SQL
@@ -226,7 +226,7 @@ One string returns rows. Several strings run the same search once per string and
 
 Hybrid search: set `text_column`. `lexical` is `fts` (default) or `trgm`.
 
-- `fts` uses English full text. It stems, drops stop words, keeps Arabic, and drops query terms that appear in more than 40% of rows. Use it on a passage column.
+- `fts` uses English full text. It stems, drops stop words, keeps Arabic, drops query terms that appear in more than 40% of rows, and ranks the rest by inverse document frequency. Use it on a passage column.
 - `trgm` uses `word_similarity()` above `pg_trgm.word_similarity_threshold`. Use it on a short name column that has a trigram index.
 
 ```json
@@ -242,7 +242,7 @@ Hybrid search: set `text_column`. `lexical` is `fts` (default) or `trgm`.
 }
 ```
 
-`metric` is `cosine` (default), `l2`, or `ip`. It must match the HNSW operator class for the index to be used. A `where` clause sets `hnsw.iterative_scan=strict_order` for that query. The default payload omits the embedding column and columns named `hash` or ending in `_hash`. `include_scores` defaults to true and adds `distance`, plus `rrf`, `dense_rank`, and `lexical_rank` on hybrid search.
+`metric` is `cosine` (default), `l2`, or `ip`. It must match the HNSW operator class for the index to be used. A `where` clause sets `hnsw.iterative_scan=strict_order` for that query. The default payload omits the embedding column and columns named `hash` or ending in `_hash`. `include_scores` defaults to true and adds `distance`, plus `rrf`, `dense_rank`, and `lexical_rank` on hybrid search. `rrf` is the sort score: for cosine, similarity plus at most 0.05 for the strongest lexical hit.
 
 ### Vector write
 

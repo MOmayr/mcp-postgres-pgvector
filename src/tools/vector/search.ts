@@ -18,7 +18,11 @@ import {
   searchSelectList,
 } from "./args.js";
 import { assertEmbeddingDimensions, getEmbeddingColumnMeta } from "./column.js";
-import { hybridCandidateLimit, hybridSearchSql } from "./hybrid.js";
+import {
+  hybridCandidateLimit,
+  hybridScoreSql,
+  hybridSearchSql,
+} from "./hybrid.js";
 import { DISTANCE_OPS, HNSW_EF_MIN } from "./types.js";
 
 function queryResultLabel(query: string): string {
@@ -140,7 +144,7 @@ export async function handleVectorSearch(client: pg.Client, args: any) {
       const selectSql = searchSelectList(
         columns,
         embeddingColumn,
-        includeScores ? [`${roundedScore(distanceExpr)} AS distance`] : [],
+        includeScores ? [`${roundedScore(distanceExpr, 4)} AS distance`] : [],
       );
       const whereSql = predicate
         ? `WHERE ${embedSql} IS NOT NULL AND (${predicate})`
@@ -154,13 +158,15 @@ export async function handleVectorSearch(client: pg.Client, args: any) {
       `;
     } else {
       const textSql = quoteIdent(textColumn);
+      const distanceExpr = `(t.${embedSql} ${op} $1::${meta.typeName})`;
+      const scoreExpr = hybridScoreSql(op, distanceExpr);
       const selectSql = searchSelectList(
         columns,
         embeddingColumn,
         includeScores
           ? [
-              `${roundedScore(`t.${embedSql} ${op} $1::${meta.typeName}`)} AS distance`,
-              `${roundedScore("f.rrf")} AS rrf`,
+              `${roundedScore(distanceExpr, 4)} AS distance`,
+              `${roundedScore(scoreExpr, 4)} AS rrf`,
               "f.dense_rank",
               "f.lexical_rank",
             ]
@@ -178,6 +184,7 @@ export async function handleVectorSearch(client: pg.Client, args: any) {
         candidates,
         limit,
         selectSql,
+        scoreSql: scoreExpr,
       });
     }
 

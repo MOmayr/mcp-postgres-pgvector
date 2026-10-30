@@ -104,8 +104,14 @@ export class PostgresServer {
   }
 
   private async cleanup() {
-    if (this.client) {
-      await this.client.end();
+    const client = this.client;
+    this.client = null;
+    if (client) {
+      await client.end().catch((error) => {
+        console.error(
+          `[MCP] Error closing PostgreSQL connection: ${getErrorMessage(error)}`,
+        );
+      });
     }
     await this.server.close();
   }
@@ -133,10 +139,23 @@ export class PostgresServer {
     }
 
     if (!this.client) {
+      const client = new Client(this.config);
+      client.on("error", (error) => {
+        console.error(
+          `[MCP] PostgreSQL connection lost: ${getErrorMessage(error)}`,
+        );
+        if (this.client === client) {
+          this.client = null;
+        }
+      });
+      this.client = client;
       try {
-        this.client = new Client(this.config);
-        await this.client.connect();
+        await client.connect();
       } catch (error) {
+        if (this.client === client) {
+          this.client = null;
+        }
+        await client.end().catch(() => undefined);
         throw new McpError(
           ErrorCode.InternalError,
           `Failed to connect to database: ${getErrorMessage(error)}`,
@@ -229,8 +248,9 @@ export class PostgresServer {
     }
 
     if (this.client) {
-      await this.client.end();
+      const client = this.client;
       this.client = null;
+      await client.end().catch(() => undefined);
     }
 
     this.config = {

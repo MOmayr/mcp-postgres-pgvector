@@ -14,9 +14,9 @@ export function qualifiedTable(schema: string, table: string): string {
   return `${quoteIdent(schema)}.${quoteIdent(table)}`;
 }
 
-/** Two decimal places for a score column. Ranking expressions stay full precision. */
-export function roundedScore(expr: string): string {
-  return `round((${expr})::numeric, 2)::float8`;
+/** Ranking expressions stay full precision. Display scores default to two decimals. */
+export function roundedScore(expr: string, digits = 2): string {
+  return `round((${expr})::numeric, ${digits})::float8`;
 }
 
 export function stripColumns(
