@@ -1,6 +1,6 @@
 import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import type pg from "pg";
-import { getErrorMessage } from "../util/error.js";
+import { formatDbError, getErrorMessage } from "../util/error.js";
 import { jsonResult, textResult } from "../util/result.js";
 import { prepareSql } from "../util/sql.js";
 
@@ -82,13 +82,14 @@ export async function handleQuery(client: pg.Client, args: any) {
     );
   }
 
+  const sql = prepareSql(args.sql);
   try {
-    const result = await client.query(prepareSql(args.sql), args.params || []);
+    const result = await client.query(sql, args.params || []);
     return jsonResult(result.rows);
   } catch (error) {
     throw new McpError(
       ErrorCode.InternalError,
-      `Query execution failed: ${getErrorMessage(error)}`,
+      `Query execution failed: ${formatDbError(error, sql)}`,
     );
   }
 }
@@ -118,8 +119,9 @@ export async function handleExecute(client: pg.Client, args: any) {
     );
   }
 
+  const sql = prepareSql(args.sql);
   try {
-    const result = await client.query(prepareSql(args.sql), args.params || []);
+    const result = await client.query(sql, args.params || []);
     return jsonResult({
       rowCount: result.rowCount,
       command: result.command,
@@ -127,7 +129,7 @@ export async function handleExecute(client: pg.Client, args: any) {
   } catch (error) {
     throw new McpError(
       ErrorCode.InternalError,
-      `Query execution failed: ${getErrorMessage(error)}`,
+      `Query execution failed: ${formatDbError(error, sql)}`,
     );
   }
 }
